@@ -120,7 +120,7 @@ def listar_similares_maior_venda(product_id, text_widget):
     FROM Produto p
     JOIN ProdutoSimilar ps ON p.ProductID = ps.SimilarProductID
     WHERE ps.ProductID = %s
-    AND p.SalesRank > (
+    AND p.SalesRank < (
         SELECT SalesRank FROM Produto WHERE ProductID = %s
     )
     ORDER BY p.SalesRank DESC;
