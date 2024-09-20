@@ -1,13 +1,9 @@
 import psycopg2
 from psycopg2 import sql
-import tkinter as tk
-from tkinter import messagebox, scrolledtext
-from tkinter import ttk
-from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.dates import DateFormatter
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from datetime import datetime
+import streamlit as st
 
 # Carregar as configurações do banco de dados
 def load_config():
@@ -22,10 +18,11 @@ def load_config():
 # Conectar ao banco de dados PostgreSQL
 def connect(config):
     try:
-        with psycopg2.connect(**config) as conn:
-            return conn
+        conn = psycopg2.connect(**config)
+        return conn
     except (psycopg2.DatabaseError, Exception) as error:
-        messagebox.showerror("Erro", str(error))
+        st.error(f"Erro ao conectar ao banco de dados: {error}")
+        return None
 
 # Função para formatar datas no formato dd/mm/yyyy
 def format_date(date):
@@ -35,24 +32,14 @@ def format_date(date):
 def format_decimal(number):
     return f"{number:.2f}"
 
-# Exibir resultados em uma caixa de texto rolável
-def display_results(text_widget, results, headers=None):
-    text_widget.delete(1.0, tk.END)
-    if headers:
-        text_widget.insert(tk.END, " | ".join(headers) + "\n")
-        text_widget.insert(tk.END, "-" * 100 + "\n")
-    for result in results:
-        text_widget.insert(tk.END, f"{result}\n")
-
 # Listar os 5 comentários mais úteis com maior e menor avaliação
-
-# Função para listar os 5 melhores e os 5 piores comentários mais úteis
-def listar_comentarios_produto(product_id, text_widget):
+def listar_comentarios_produto(product_id):
     config = load_config()
     conn = connect(config)
+    if not conn:
+        return
     cur = conn.cursor()
 
-    # Subquery para pegar os 10 comentários mais úteis (HelpfulVotes)
     query = """
     WITH TopHelpfulReviews AS (
         SELECT r.ReviewID, r.CustomerID, r.Rating, r.HelpfulVotes, r.ReviewDate
@@ -62,13 +49,10 @@ def listar_comentarios_produto(product_id, text_widget):
         LIMIT 10
     )
     (
-        -- Selecionando os 5 com maior rating
         SELECT * FROM TopHelpfulReviews
         ORDER BY Rating DESC, HelpfulVotes DESC
     );
     """
-
-    # Executando a consulta com o ProductID fornecido
     cur.execute(query, (product_id,))
     comentarios = cur.fetchall()
     cur.close()
@@ -76,12 +60,9 @@ def listar_comentarios_produto(product_id, text_widget):
 
     comentarios_ordenados = sorted([comentario for comentario in comentarios if comentario[2]], key=lambda x: (-x[2], -x[3]))
 
-    # Pegar os 5 primeiros e os 5 últimos comentários
     melhores_comentarios = comentarios_ordenados[:5]
     piores_comentarios = comentarios_ordenados[-5:]
     
-
-    # Formatar as datas e exibir resultados
     melhores_formatados = [
         (review_id, customer_id, format_decimal(rating), helpful_votes, format_date(review_date))
         for (review_id, customer_id, rating, helpful_votes, review_date) in melhores_comentarios
@@ -93,28 +74,20 @@ def listar_comentarios_produto(product_id, text_widget):
     ]
     piores_formatados = sorted(piores_formatados, key=lambda x: x[3], reverse=True)
 
-    # Cabeçalhos para exibir os resultados
-    text_widget.delete(1.0, tk.END)
-    
-    text_widget.insert(tk.END, "Melhor avaliados:\n")
-    text_widget.insert(tk.END, "ReviewID | CustomerID | Rating | HelpfulVotes | ReviewDate\n")
-    text_widget.insert(tk.END, "-" * 100 + "\n")
-    for comentario in melhores_formatados:
-        text_widget.insert(tk.END, f"{comentario}\n")
-    
-    text_widget.insert(tk.END, "\nPior avaliados:\n")
-    text_widget.insert(tk.END, "ReviewID | CustomerID | Rating | HelpfulVotes | ReviewDate\n")
-    text_widget.insert(tk.END, "-" * 100 + "\n")
-    for comentario in piores_formatados:
-        text_widget.insert(tk.END, f"{comentario}\n")
+    st.write("### Comentários Melhor Avaliados")
+    st.write(pd.DataFrame(melhores_formatados, columns=["ReviewID", "CustomerID", "Rating", "HelpfulVotes", "ReviewDate"]))
 
+    st.write("### Comentários Pior Avaliados")
+    st.write(pd.DataFrame(piores_formatados, columns=["ReviewID", "CustomerID", "Rating", "HelpfulVotes", "ReviewDate"]))
 
 # Listar os produtos similares com maiores vendas
-def listar_similares_maior_venda(product_id, text_widget):
+def listar_similares_maior_venda(product_id):
     config = load_config()
     conn = connect(config)
+    if not conn:
+        return
     cur = conn.cursor()
-    
+
     query = """
     SELECT p.ProductID, p.Title, p.SalesRank
     FROM Produto p
@@ -127,6 +100,7 @@ def listar_similares_maior_venda(product_id, text_widget):
     """
     cur.execute(query, (product_id, product_id))
     similares = cur.fetchall()
+
     query = """
     SELECT p.ProductID, p.Title, p.SalesRank
     FROM Produto p
@@ -137,35 +111,18 @@ def listar_similares_maior_venda(product_id, text_widget):
     cur.close()
     conn.close()
     
-    # Formatar os números decimais e exibir resultados
-    similares_formatados = [
-        (product_id, title, (sales_rank))
-        for (product_id, title, sales_rank) in similares
-    ]
+    st.write("### Produto Base")
+    st.write(pd.DataFrame(produto, columns=["ProductID", "Title", "SalesRank"]))
     
-    produto_formatado = [
-        (product_id, title, (sales_rank))
-        for (product_id, title, sales_rank) in produto
-        ]
-
-    text_widget.delete(1.0, tk.END)
-    
-    text_widget.insert(tk.END, "Produto Base:\n")
-    text_widget.insert(tk.END, "ProductID | Title | SalesRank\n")
-    text_widget.insert(tk.END, "-" * 100 + "\n")
-    for produto in produto_formatado:
-        text_widget.insert(tk.END, f"{produto}\n")
-
-    text_widget.insert(tk.END, "\nProdutos Similares com Maior Venda:\n")
-    text_widget.insert(tk.END, "ProductID | Title | SalesRank\n")
-    text_widget.insert(tk.END, "-" * 100 + "\n")
-    for similar in similares_formatados:
-        text_widget.insert(tk.END, f"{similar}\n")
+    st.write("### Produtos Similares com Maior Venda")
+    st.write(pd.DataFrame(similares, columns=["ProductID", "Title", "SalesRank"]))
 
 # Mostrar a evolução das médias de avaliação
-def evolucao_media_avaliacao(product_id, text_widget):
+def evolucao_media_avaliacao(product_id):
     config = load_config()
     conn = connect(config)
+    if not conn:
+        return
     cur = conn.cursor()
     
     query = """
@@ -180,70 +137,27 @@ def evolucao_media_avaliacao(product_id, text_widget):
     cur.close()
     conn.close()
     
-    # Formatar datas e números decimais
-    evolucao_formatada = [
-        (format_date(review_date), format_decimal(avg_rating))
-        for (review_date, avg_rating) in evolucao
-    ]
-    
-    headers = ["ReviewDate", "AvgRating"]
-    display_results(text_widget, evolucao_formatada, headers)
-    
     data = {
-        'ReviewDate': [format_date(review_date) for review_date, _ in evolucao],
-        'AvgRating': [float(format_decimal(avg_rating)) for _, avg_rating in evolucao]  # Converter para float
+        'ReviewDate': [review_date for review_date, _ in evolucao],
+        'AvgRating': [float(avg_rating) for _, avg_rating in evolucao]
     }
     
-    # Criar um DataFrame do Pandas
     df = pd.DataFrame(data)
-    
-    # Converter datas para o formato datetime
-    df['ReviewDate'] = pd.to_datetime(df['ReviewDate'], format='%d/%m/%Y')
-    
-    # Criar um intervalo contínuo de datas
-    all_dates = pd.date_range(start=df['ReviewDate'].min(), end=df['ReviewDate'].max(), freq='D')
-    df.set_index('ReviewDate', inplace=True)
-    df = df.reindex(all_dates, fill_value=None)
-    df.index.name = 'ReviewDate'
-    
-    # Interpolação de médias de avaliação
-    df['AvgRating'] = df['AvgRating'].interpolate(method='linear')
-    sample_size = max(1, len(df.index) // 10)  # Ajuste o divisor para alterar o número de pontos
-    sampled_df = df.iloc[::sample_size]
-    
-    # Criar gráfico de linha com marcadores
-    fig, ax = plt.subplots()
-    ax.plot(sampled_df.index, sampled_df['AvgRating'], marker='o', linestyle='-', color='blue')
-    ax.set_xlabel('Data da Avaliação')
-    ax.set_ylabel('Média de Avaliação')
-    ax.set_title('Evolução da Média de Avaliações ao Longo do Tempo')
-    ax.grid(True)
+    df['ReviewDate'] = pd.to_datetime(df['ReviewDate'])
 
-    # Formatador de datas para o eixo x
-    date_format = DateFormatter('%d/%m/%Y')
-    ax.xaxis.set_major_formatter(date_format)
+    st.write("### Evolução da Média de Avaliações")
+    st.line_chart(df.set_index('ReviewDate'))
 
-    # Ajustar os ticks do eixo x para corresponder exatamente às datas presentes
-    ax.set_xticks(df.index[::max(1, len(df.index) // 6)])  # Mostrar menos ticks no eixo X se houver muitas datas
-    plt.xticks(rotation=45)
-
+    # Exibindo a tabela abaixo do gráfico
+    st.write("### Tabela de Evolução da Média de Avaliações Diárias")
+    st.write(df)
     
-    
-    # Integrar o gráfico ao Tkinter
-    root = tk.Tk()
-    root.title("Gráfico de Evolução da Avaliação")
-    root.geometry("900x600")
-    
-    canvas = FigureCanvasTkAgg(fig, master=root)
-    canvas.draw()
-    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-    root.mainloop()
-
 # Listar os 10 produtos líderes de venda por grupo
-def listar_lideres_venda_por_grupo(text_widget):
+def listar_lideres_venda_por_grupo():
     config = load_config()
     conn = connect(config)
+    if not conn:
+        return
     cur = conn.cursor()
     
     query = """
@@ -271,26 +185,15 @@ def listar_lideres_venda_por_grupo(text_widget):
     cur.close()
     conn.close()
     
-    # Formatar números decimais e exibir resultados
-    lideres_formatados = [
-        (
-            product_group, 
-            product_id, 
-            title, 
-            (sales_rank) if sales_rank is not None else "N/A"
-        )
-        for (product_group, product_id, title, sales_rank) in lideres
-    ]
-    
-    headers = ["ProductGroup", "ProductID", "Title", "SalesRank"]
-    display_results(text_widget, lideres_formatados, headers)
-
-
+    st.write("### Produtos Líderes de Venda por Grupo")
+    st.write(pd.DataFrame(lideres, columns=["ProductGroup", "ProductID", "Title", "SalesRank"]))
 
 # Listar os 10 produtos com a maior média de avaliações úteis
-def listar_produtos_melhores_avaliacoes(text_widget):
+def listar_produtos_melhores_avaliacoes():
     config = load_config()
     conn = connect(config)
+    if not conn:
+        return
     cur = conn.cursor()
     
     query = """
@@ -306,20 +209,15 @@ def listar_produtos_melhores_avaliacoes(text_widget):
     cur.close()
     conn.close()
     
-    # Formatar números decimais
-    melhores_avaliacoes_formatadas = [
-        (product_id, title, format_decimal(avg_helpful_votes))
-        for (product_id, title, avg_helpful_votes) in melhores_avaliacoes
-    ]
-    
-    headers = ["ProductID", "Title", "AvgHelpfulVotes"]
-    display_results(text_widget, melhores_avaliacoes_formatadas, headers)
-
+    st.write("### Produtos com Maior Média de Avaliações Úteis")
+    st.write(pd.DataFrame(melhores_avaliacoes, columns=["ProductID", "Title", "AvgHelpfulVotes"]))
 
 # Listar as 5 categorias com a maior média de avaliações úteis
-def listar_melhores_categorias(text_widget):
+def listar_melhores_categorias():
     config = load_config()
     conn = connect(config)
+    if not conn:
+        return
     cur = conn.cursor()
     
     query = """
@@ -349,27 +247,21 @@ def listar_melhores_categorias(text_widget):
     ORDER BY 
         AvgHelpfulVotes DESC
     LIMIT 5;
-
     """
     cur.execute(query)
     melhores_categorias = cur.fetchall()
     cur.close()
     conn.close()
     
-    # Formatar números decimais e ignorar CategoryID
-    melhores_categorias_formatadas = [
-        (category_name, format_decimal(avg_helpful_votes))
-        for (_, category_name, avg_helpful_votes) in melhores_categorias
-    ]
-    
-    headers = ["CategoryName", "AvgHelpfulVotes"]
-    display_results(text_widget, melhores_categorias_formatadas, headers)
-
+    st.write("### Categorias com Maior Média de Avaliações Úteis")
+    st.write(pd.DataFrame(melhores_categorias, columns=["CategoryID", "CategoryName", "AvgHelpfulVotes"]))
 
 # Listar os 10 clientes que mais fizeram comentários por grupo
-def listar_clientes_por_grupo(text_widget):
+def listar_clientes_por_grupo():
     config = load_config()
     conn = connect(config)
+    if not conn:
+        return
     cur = conn.cursor()
     
     query = """
@@ -383,118 +275,64 @@ def listar_clientes_por_grupo(text_widget):
         JOIN Produto P ON R.ProductID = P.ProductID
         GROUP BY P.ProductGroup, R.CustomerID
     )
-    SELECT ProductGroup, CustomerID, TotalReviews
+    SELECT 
+        ProductGroup, 
+        CustomerID, 
+        TotalReviews
     FROM RankedReviews
     WHERE rank <= 10
-    ORDER BY ProductGroup, TotalReviews     ;
+    ORDER BY ProductGroup, TotalReviews DESC;
     """
     cur.execute(query)
     clientes = cur.fetchall()
     cur.close()
     conn.close()
     
-    headers = ["ProductGroup", "CustomerID", "ReviewCount"]
-    display_results(text_widget, clientes, headers)
+    st.write("### Clientes que Mais Fizeram Comentários por Grupo")
+    st.write(pd.DataFrame(clientes, columns=["ProductGroup", "CustomerID", "TotalReviews"]))
 
-def procurar_por_titulo(titulo, text_widget):
-    config = load_config()
-    conn = connect(config)
-    cur = conn.cursor()
-    
-    query = """
-    SELECT *
-    FROM Produto p
-    WHERE p.Title LIKE %s;
-    """
-    cur.execute(query, (titulo,))
-    produtos = cur.fetchall()
-    cur.close()
-    conn.close()
-    
-    # Exibir resultados
-    produtos_formatados = [
-        (product_id, title, (sales_rank), group)
-        for (product_id, title, sales_rank, group) in produtos
+# Função principal
+def main():
+    st.title("Dashboard de Análise de Produtos")
+
+    # Seleção da funcionalidade
+    opcoes = [
+        "Comentários mais úteis de um produto",
+        "Produtos similares com maiores vendas",
+        "Evolução da média de avaliações",
+        "Produtos líderes de venda por grupo",
+        "Produtos com maior média de avaliações úteis",
+        "Categorias com maior média de avaliações úteis",
+        "Clientes que mais fizeram comentários por grupo"
     ]
-    
-    headers = ["ProductID", "Title", "SalesRank", "ProductGroup"]
-    display_results(text_widget, produtos_formatados, headers)
+    escolha = st.selectbox("Escolha uma funcionalidade:", opcoes)
 
-def create_gui():
-    def update_label(event):
-        # Atualiza o texto do rótulo com base na escolha do combo box
-        if combo_choice.get() == 'procurar por titulo':
-            label_product_id.config(text="Digite o título do produto:")
-        else:
-            label_product_id.config(text="Digite o ID do produto:")
+    # ID do produto input
+    if escolha in [
+        "Comentários mais úteis de um produto",
+        "Produtos similares com maiores vendas",
+        "Evolução da média de avaliações"
+    ]:
+        product_id = st.text_input("Digite o ID do produto:", "")
 
-    def handle_choice():
-        choice = combo_choice.get()
-        product_id = entry_product_id.get()
-        if choice == 'Listar comentários mais úteis':
-            listar_comentarios_produto(product_id, text_area)
-        elif choice == 'Listar Produtos Similares com Maior Venda':
-            listar_similares_maior_venda(product_id, text_area)
-        elif choice == 'Evolução da Avaliação':
-            evolucao_media_avaliacao(product_id, text_area)
-        elif choice == 'Listar os 10 produtos líderes de venda em cada grupo de produtos':
-            listar_lideres_venda_por_grupo(text_area)
-        elif choice == 'Listar os 10 produtos com a maior média de avaliações úteis positivas por produto':
-            listar_produtos_melhores_avaliacoes(text_area)
-        elif choice == 'Listar a 5 categorias de produto com a maior média de avaliações úteis positivas por produto':
-            listar_melhores_categorias(text_area)
-        elif choice == 'Listar os 10 clientes que mais fizeram comentários por grupo de produto':
-            listar_clientes_por_grupo(text_area)
-        else:
-            messagebox.showerror("Erro", "Opção inválida.")
-
-    root = tk.Tk()
-    root.title("Consulta ao Banco de Dados")
-    root.geometry("900x600")  # Largura x Altura
-
-    root.grid_rowconfigure(3, weight=1)  # Linha da caixa de texto rolável
-    root.grid_columnconfigure(0, weight=1)  # Coluna da primeira coluna
-    root.grid_columnconfigure(1, weight=1)  # Coluna da segunda coluna
-
-    # Caixa seletora para escolher a função
-    tk.Label(root, text="Selecione a função:").grid(row=0, column=0, padx=10, pady=10, sticky='w')
-    combo_choice = ttk.Combobox(root, values=[
-        'Listar comentários mais úteis',
-        'Listar Produtos Similares com Maior Venda',
-        'Evolução da Avaliação',
-        'Listar os 10 produtos líderes de venda em cada grupo de produtos',
-        'Listar os 10 produtos com a maior média de avaliações úteis positivas por produto',
-        'Listar a 5 categorias de produto com a maior média de avaliações úteis positivas por produto',
-        'Listar os 10 clientes que mais fizeram comentários por grupo de produto'
-    ])
-    combo_choice.grid(row=0, column=1, padx=10, pady=10, sticky='ew')
-    combo_choice.current(0)
-
-    # Rótulo para o campo de entrada
-    label_product_id = tk.Label(root, text="Digite o ID do produto:")
-    label_product_id.grid(row=1, column=0, padx=10, pady=10, sticky='w')
-
-    # Campo para entrada do ID do produto
-    entry_product_id = tk.Entry(root)
-    entry_product_id.grid(row=1, column=1, padx=10, pady=10, sticky='ew')
-
-    # Botão para executar a função selecionada
-    btn_execute = tk.Button(root, text="Executar", command=handle_choice)
-    btn_execute.grid(row=2, column=0, columnspan=2, padx=10, pady=10, sticky='ew')
-
-    # Caixa de texto rolável para exibir os resultados
-    text_area = scrolledtext.ScrolledText(root, wrap=tk.WORD)
-    text_area.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky='nsew')
-
-    # Atualizar o rótulo quando a escolha mudar
-    combo_choice.bind("<<ComboboxSelected>>", update_label)
-
-    # Configurar as proporções das colunas e linhas para que eles se ajustem ao redimensionar a janela
-    root.grid_rowconfigure(3, weight=1)
-    root.grid_columnconfigure(0, weight=1)
-    root.grid_columnconfigure(1, weight=1)
-    root.protocol("WM_DELETE_WINDOW", root.quit)
-    root.mainloop()
+    # Chama a função correspondente com base na escolha
+    if escolha == "Comentários mais úteis de um produto":
+        if product_id:
+            listar_comentarios_produto(product_id)
+    elif escolha == "Produtos similares com maiores vendas":
+        if product_id:
+            listar_similares_maior_venda(product_id)
+    elif escolha == "Evolução da média de avaliações":
+        if product_id:
+            evolucao_media_avaliacao(product_id)
+    elif escolha == "Produtos líderes de venda por grupo":
+        listar_lideres_venda_por_grupo()
+    elif escolha == "Produtos com maior média de avaliações úteis":
+        listar_produtos_melhores_avaliacoes()
+    elif escolha == "Categorias com maior média de avaliações úteis":
+        listar_melhores_categorias()
+    elif escolha == "Clientes que mais fizeram comentários por grupo":
+        listar_clientes_por_grupo()
 
 if __name__ == "__main__":
-    create_gui()
+    main()
