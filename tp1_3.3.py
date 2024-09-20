@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.dates import DateFormatter
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-# Carregar as configurações do banco de dados
+# Caarregar as configurações do banco de dados
 def load_config():
     config = {
         'host': 'localhost',
