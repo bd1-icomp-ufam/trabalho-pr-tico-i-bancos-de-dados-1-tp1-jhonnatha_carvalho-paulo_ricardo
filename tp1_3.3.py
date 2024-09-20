@@ -65,14 +65,6 @@ def listar_comentarios_produto(product_id, text_widget):
         -- Selecionando os 5 com maior rating
         SELECT * FROM TopHelpfulReviews
         ORDER BY Rating DESC, HelpfulVotes DESC
-        LIMIT 5
-    )
-    UNION ALL
-    (
-        -- Selecionando os 5 com menor rating
-        SELECT * FROM TopHelpfulReviews
-        ORDER BY Rating ASC, HelpfulVotes DESC
-        LIMIT 5
     );
     """
 
@@ -99,6 +91,7 @@ def listar_comentarios_produto(product_id, text_widget):
         (review_id, customer_id, format_decimal(rating), helpful_votes, format_date(review_date))
         for (review_id, customer_id, rating, helpful_votes, review_date) in piores_comentarios
     ]
+    piores_formatados = sorted(piores_formatados, key=lambda x: x[3], reverse=True)
 
     # Cabeçalhos para exibir os resultados
     text_widget.delete(1.0, tk.END)
