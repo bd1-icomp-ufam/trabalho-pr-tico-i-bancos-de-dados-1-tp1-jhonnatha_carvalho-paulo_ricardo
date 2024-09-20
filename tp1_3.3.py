@@ -211,21 +211,22 @@ def evolucao_media_avaliacao(product_id, text_widget):
     sample_size = max(1, len(df.index) // 10)  # Ajuste o divisor para alterar o número de pontos
     sampled_df = df.iloc[::sample_size]
     
-    # Criar o gráfico
+    # Criar gráfico de linha com marcadores
     fig, ax = plt.subplots()
-    ax.plot(sampled_df.index, sampled_df['AvgRating'], marker='o')
+    ax.plot(sampled_df.index, sampled_df['AvgRating'], marker='o', linestyle='-', color='blue')
     ax.set_xlabel('Data da Avaliação')
     ax.set_ylabel('Média de Avaliação')
     ax.set_title('Evolução da Média de Avaliações ao Longo do Tempo')
     ax.grid(True)
-    
+
     # Formatador de datas para o eixo x
     date_format = DateFormatter('%d/%m/%Y')
     ax.xaxis.set_major_formatter(date_format)
-    
+
     # Ajustar os ticks do eixo x para corresponder exatamente às datas presentes
     ax.set_xticks(df.index[::max(1, len(df.index) // 6)])  # Mostrar menos ticks no eixo X se houver muitas datas
     plt.xticks(rotation=45)
+
     
     
     # Integrar o gráfico ao Tkinter
