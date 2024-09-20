@@ -5,7 +5,6 @@ import psycopg2.extras
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from tqdm import tqdm
 
 
 BATCH_SIZE = 10000
@@ -49,7 +48,7 @@ def connect(config):
     """ Connect to the PostgreSQL database server """
     try:
         with psycopg2.connect(**config) as conn:
-            print('Connected to the PostgreSQL server.')
+            #print('Connected to the PostgreSQL server.')
             return conn
     except (psycopg2.DatabaseError, Exception) as error:
         print(error)
@@ -116,12 +115,6 @@ def create_tables(conn):
         print(f'Error creating tables: {error}')
 
 
-BATCH_SIZE = 1000  # Defina o tamanho do lote conforme necessário
-
-def connect(config):
-    """Conectar ao banco de dados usando a configuração fornecida"""
-    return psycopg2.connect(**config)
-
 def insert_product_from_file(file_path, config):
     """Inserir ou atualizar produtos no banco de dados a partir de um arquivo de texto usando inserção por lote"""
     conn = connect(config)
@@ -135,7 +128,7 @@ def insert_product_from_file(file_path, config):
 
             batch_data = []
 
-            for product in tqdm(produtos, desc='Processando produtos', unit='produto', total=total_products):
+            for product in produtos:
                 product_id_match = re.search(r'ASIN:\s*(\S+)', product)
                 title_match = re.search(r'title:\s*(.+)', product)
                 sales_rank_match = re.search(r'salesrank:\s*(-?\d+)', product)
@@ -207,7 +200,7 @@ def insert_categories_from_file(file_path, config):
             categoria_data = []
             categoria_produto_data = []
 
-            for product in tqdm(produtos, desc='Processando categorias', unit='categoria', total=total_products):
+            for product in produtos:
                 product_id_match = re.search(r'ASIN:\s*(\S+)', product)
                 if not product_id_match:
                     continue
@@ -295,7 +288,7 @@ def insert_reviews_from_file(file_path, config):
 
             review_data = []
 
-            for product in tqdm(produtos, desc='Processando reviews', unit='review', total=total_products):
+            for product in produtos:
                 product_id_match = re.search(r'ASIN:\s*(\S+)', product)
                 if not product_id_match:
                     continue
@@ -352,17 +345,6 @@ def insert_reviews_from_file(file_path, config):
         conn.close()
 
 
-BATCH_SIZE = 1000  # Defina o tamanho do lote conforme necessário
-
-def connect(config):
-    """Conectar ao banco de dados usando a configuração fornecida"""
-    return psycopg2.connect(**config)
-
-BATCH_SIZE = 1000  # Defina o tamanho do lote conforme necessário
-
-def connect(config):
-    """Conectar ao banco de dados usando a configuração fornecida"""
-    return psycopg2.connect(**config)
 
 def insert_similar_products_from_file(file_path, config):
     """Inserir produtos similares no banco de dados a partir de um arquivo de texto usando inserção por lote"""
@@ -380,7 +362,7 @@ def insert_similar_products_from_file(file_path, config):
             produto_data = []
             similar_data = []
             
-            for product in tqdm(produtos, desc='Processando produtos similares', unit='produto'):
+            for product in produtos:
                 # Extrair o ProductID
                 product_id_match = re.search(r'ASIN:\s*(\S+)', product)
                 if not product_id_match:
@@ -536,17 +518,15 @@ def process_insertion(file_path, config):
         for future in futures:
             future.result()
 
-import os
-
 def deletar_partes():
     arquivos = ['parte1.txt', 'parte2.txt']
     
     for arquivo in arquivos:
         if os.path.exists(arquivo):
             os.remove(arquivo)
-            print(f"Arquivo '{arquivo}' foi deletado com sucesso.")
+            print(f"")
         else:
-            print(f"Arquivo '{arquivo}' não foi encontrado.")
+            print(f"")
 def main():
     """Função principal para coordenar a execução das inserções no banco de dados"""
     # Configuração do argparse para aceitar o caminho do arquivo pelo terminal
@@ -571,6 +551,7 @@ def main():
     print("Iniciando a inserção de produtos...")
     produto_thread(file_path, config)
     deletar_partes()
+    print("Iniciando a inserção de categorias, produtos similares e reviews...")
     process_insertion(file_path, config)
     #print("Iniciando a inserção de categorias...")
     #insert_categories_from_file(file_path, config)
