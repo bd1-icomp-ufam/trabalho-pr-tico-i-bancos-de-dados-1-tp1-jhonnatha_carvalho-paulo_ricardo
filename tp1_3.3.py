@@ -1,7 +1,7 @@
 import psycopg2
 from psycopg2 import sql
 from datetime import datetime
-
+import os
 
 # Carregar as configurações do banco de dados
 def load_config():
@@ -376,7 +376,9 @@ def listar_produtos_melhores_avaliacoes():
 
 def main():
     
+    
     while True:
+        os.system('clear')
         print("Selecione a função:")
         choices = [
             'Listar comentários mais úteis',
@@ -420,5 +422,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
